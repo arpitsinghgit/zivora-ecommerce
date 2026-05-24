@@ -8,10 +8,10 @@ const fs = require('fs');
 
 const { createClient } = require('@supabase/supabase-js');
 
-// Initialize Supabase client
+// Initialize Supabase client safely so it doesn't crash the server on boot if env vars are missing
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_URL || 'https://missing-url.supabase.co',
+  process.env.SUPABASE_KEY || 'missing-key'
 );
 
 // Multer setup using memory storage for direct upload to Supabase
