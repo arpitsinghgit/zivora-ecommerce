@@ -193,8 +193,8 @@ export default function Home() {
             >
               <div className="relative aspect-[3/4] bg-zinc-50 overflow-hidden">
                 <img
-                  src={product.images[0]}
-                  alt={product.name}
+                  src={product.images?.[0] || 'https://images.unsplash.com/photo-1604654894610-df63bc536371?q=80&w=600&auto=format&fit=crop'}
+                  alt={product.name || 'Product'}
                   className="w-full h-full object-cover object-center group-hover:scale-103 transition-transform duration-500"
                 />
                 <span className="absolute top-3 left-3 text-[9px] font-bold tracking-widest uppercase bg-amber-700 text-white px-2.5 py-1 rounded-sm">
@@ -208,7 +208,7 @@ export default function Home() {
                     {product.categoryLabel}
                   </span>
                   <h3 className="font-serif text-sm font-semibold text-zinc-900 mt-0.5 line-clamp-1">
-                    {product.name}
+                    {product.name || 'Unnamed Product'}
                   </h3>
                   
                   <div className="flex items-center space-x-1 mt-1 text-amber-400">
@@ -216,16 +216,16 @@ export default function Home() {
                       <Star
                         key={i}
                         className={`w-3 h-3 ${
-                          i < Math.floor(product.rating) ? 'fill-current' : ''
+                          i < Math.floor(product.rating || 5) ? 'fill-current' : ''
                         }`}
                       />
                     ))}
-                    <span className="text-[10px] text-zinc-400 ml-1">({product.reviewCount})</span>
+                    <span className="text-[10px] text-zinc-400 ml-1">({product.reviewCount || 0})</span>
                   </div>
                 </div>
 
                 <div className="mt-3 pt-2 border-t border-zinc-50 flex justify-between items-baseline">
-                  <span className="text-sm font-bold text-zinc-900">₹{product.price.toFixed(0)}</span>
+                  <span className="text-sm font-bold text-zinc-900">₹{(product.price || 0).toFixed(0)}</span>
                   <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider group-hover:underline">
                     Select Options
                   </span>
