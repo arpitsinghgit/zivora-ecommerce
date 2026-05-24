@@ -6,13 +6,21 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, default: 'user', enum: ['user', 'admin'] },
+  cart: [{
+    product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+    quantity: { type: Number, default: 1 },
+    selectedSize: { type: String },
+    selectedShape: { type: String },
+    selectedColor: { type: String }
+  }],
+  wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   addresses: [{
-    fullName: String,
-    streetAddress: String,
+    firstName: String,
+    lastName: String,
+    street: String,
     city: String,
-    state: String,
-    pincode: String,
-    country: String,
+    zipCode: String,
+    phone: String,
     isDefault: Boolean
   }]
 }, { timestamps: true });

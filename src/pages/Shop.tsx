@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Filter, SlidersHorizontal, RotateCcw, Grid, List } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Filter, SlidersHorizontal, RotateCcw, Grid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { Product } from '../data/products';
@@ -13,7 +13,12 @@ export default function Shop() {
   const navigate = useNavigate();
 
   const selectedCategory = searchParams.get('category') || 'all';
-  const [searchQuery, setSearchQuery] = useState('');
+  const searchQuery = searchParams.get('search') || '';
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
 
   // Filter States
   const [selectedShape, setSelectedShape] = useState<string>('All');
@@ -22,13 +27,38 @@ export default function Shop() {
   const [sortBy, setSortBy] = useState<string>('featured');
   const [showFiltersMobile, setShowFiltersMobile] = useState<boolean>(false);
   const [viewStyle, setViewStyle] = useState<'grid3' | 'grid4'>('grid3');
+  const [isLoading, setIsLoading] = useState(false);
 
   const shapes = ['All', 'Almond', 'Coffin', 'Square', 'Oval', 'Stiletto'];
   const sizes = ['All', 'XS', 'S', 'M', 'L', 'Custom'];
 
   useEffect(() => {
-    api.getProducts().then(setProducts);
-  }, []);
+    const fetchProducts = async () => {
+      setIsLoading(true);
+      try {
+        const filters = {
+          category: selectedCategory,
+          search: searchQuery,
+          shape: selectedShape,
+          size: selectedSize,
+          priceRange,
+          sortBy,
+          page,
+          limit: 12
+        };
+        const data = await api.getProducts(filters);
+        setProducts(data.products || []);
+        setTotalPages(data.pages || 1);
+        setTotalProducts(data.total || 0);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchProducts();
+  }, [selectedCategory, searchQuery, selectedShape, selectedSize, priceRange, sortBy, page]);
 
   const setCategory = (cat: string) => {
     if (cat === 'all') {
@@ -45,48 +75,16 @@ export default function Shop() {
     setSelectedSize('All');
     setPriceRange('All');
     setSortBy('featured');
-    setSearchQuery('');
+    setPage(1);
+    if (searchParams.has('search')) {
+      searchParams.delete('search');
+      setSearchParams(searchParams);
+    }
   };
 
   const onSelectProduct = (product: Product) => {
     navigate(`/product/${product.id}`);
   };
-
-  const processedProducts = useMemo(() => {
-    let result = [...products];
-
-    if (selectedCategory !== 'all') {
-      result = result.filter(p => p.category === selectedCategory);
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(q) || 
-        p.description.toLowerCase().includes(q) ||
-        p.tags.some(t => t.toLowerCase().includes(q))
-      );
-    }
-
-    if (selectedShape !== 'All') {
-      result = result.filter(p => p.shapes?.includes(selectedShape as any));
-    }
-    if (selectedSize !== 'All') {
-      result = result.filter(p => p.sizes?.includes(selectedSize as any));
-    }
-    if (priceRange !== 'All') {
-      if (priceRange === 'under-20') result = result.filter(p => p.price < 300);
-      else if (priceRange === '20-40') result = result.filter(p => p.price >= 300 && p.price <= 800);
-      else if (priceRange === 'over-40') result = result.filter(p => p.price > 800);
-    }
-
-    if (sortBy === 'price-low') result.sort((a, b) => a.price - b.price);
-    else if (sortBy === 'price-high') result.sort((a, b) => b.price - a.price);
-    else if (sortBy === 'rating') result.sort((a, b) => b.rating - a.rating);
-    else if (sortBy === 'newest') result.sort((a, b) => (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0));
-
-    return result;
-  }, [products, selectedCategory, searchQuery, selectedShape, selectedSize, priceRange, sortBy]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -137,7 +135,7 @@ export default function Shop() {
             <span>Filters {selectedShape !== 'All' || selectedSize !== 'All' || priceRange !== 'All' ? '(Active)' : ''}</span>
           </button>
           <span className="text-xs text-zinc-500 font-medium">
-            Showing {processedProducts.length} premium items
+            Showing {products.length} of {totalProducts} items
           </span>
         </div>
 
@@ -148,7 +146,7 @@ export default function Shop() {
           </div>
           <div className="flex items-center space-x-2 text-xs">
             <span className="text-zinc-500 font-medium">Sort by:</span>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="p-2 border border-zinc-200 rounded-lg">
+            <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1); }} className="p-2 border border-zinc-200 rounded-lg">
               <option value="featured">Best Matches</option>
               <option value="rating">Top Customer Rated</option>
               <option value="newest">New Arrivals</option>
@@ -165,7 +163,7 @@ export default function Shop() {
           {(selectedCategory === 'all' || selectedCategory === 'press-on') && (
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-zinc-800 uppercase block">Nail Shape</label>
-              <select value={selectedShape} onChange={(e) => setSelectedShape(e.target.value)} className="w-full p-2.5 border border-zinc-200 rounded-lg">
+              <select value={selectedShape} onChange={(e) => { setSelectedShape(e.target.value); setPage(1); }} className="w-full p-2.5 border border-zinc-200 rounded-lg">
                 {shapes.map(s => <option key={s} value={s}>{s === 'All' ? 'All Shapes' : s}</option>)}
               </select>
             </div>
@@ -173,14 +171,14 @@ export default function Shop() {
           {(selectedCategory === 'all' || selectedCategory === 'press-on') && (
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-zinc-800 uppercase block">Nail Size</label>
-              <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} className="w-full p-2.5 border border-zinc-200 rounded-lg">
+              <select value={selectedSize} onChange={(e) => { setSelectedSize(e.target.value); setPage(1); }} className="w-full p-2.5 border border-zinc-200 rounded-lg">
                 {sizes.map(sz => <option key={sz} value={sz}>{sz === 'All' ? 'All Sizes' : sz}</option>)}
               </select>
             </div>
           )}
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-zinc-800 uppercase block">Price Range</label>
-            <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} className="w-full p-2.5 border border-zinc-200 rounded-lg">
+            <select value={priceRange} onChange={(e) => { setPriceRange(e.target.value); setPage(1); }} className="w-full p-2.5 border border-zinc-200 rounded-lg">
               <option value="All">All Prices</option>
               <option value="under-20">Under ₹300</option>
               <option value="20-40">₹300 to ₹800</option>
@@ -196,24 +194,50 @@ export default function Shop() {
       )}
 
       {/* Grid */}
-      {processedProducts.length === 0 ? (
+      {isLoading ? (
+        <div className="text-center py-20 text-zinc-500">Loading premium products...</div>
+      ) : products.length === 0 ? (
         <div className="text-center py-20 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
           <Filter className="w-12 h-12 text-zinc-300 mx-auto mb-4" />
           <h3 className="font-serif text-lg font-semibold text-zinc-900">No products match your criteria</h3>
         </div>
       ) : (
-        <div className={`grid gap-6 ${viewStyle === 'grid4' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
-          {processedProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onSelect={onSelectProduct}
-              onAddToCart={addToCart}
-            />
-          ))}
-        </div>
-      )}
+        <>
+          <div className={`grid gap-6 ${viewStyle === 'grid4' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+            {products.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onSelect={onSelectProduct}
+                onAddToCart={addToCart}
+              />
+            ))}
+          </div>
 
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-12 flex items-center justify-center space-x-4">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 border border-zinc-200 rounded-lg disabled:opacity-50 hover:bg-zinc-50 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-semibold text-zinc-700">
+                Page {page} of {totalPages}
+              </span>
+              <button 
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-2 border border-zinc-200 rounded-lg disabled:opacity-50 hover:bg-zinc-50 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

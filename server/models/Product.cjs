@@ -6,7 +6,6 @@ const productSchema = new mongoose.Schema({
   category: { type: String, required: true, enum: ['press-on', 'polish', 'art-care', 'accessories'] },
   categoryLabel: { type: String, required: true },
   price: { type: Number, required: true },
-  originalPrice: { type: Number },
   rating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   description: { type: String, required: true },

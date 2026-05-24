@@ -5,44 +5,26 @@ const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:5000/api';
 
 export const api = {
   /**
-   * Fetches all products from the local MongoDB Database.
+   * Fetches products with filtering and pagination
    */
-  getProducts: async (): Promise<Product[]> => {
+  getProducts: async (filters: any = {}): Promise<{products: Product[], page: number, pages: number, total: number}> => {
     try {
-      const response = await fetch(`${API_URL}/products`);
+      const queryParams = new URLSearchParams();
+      if (filters.category && filters.category !== 'all') queryParams.append('category', filters.category);
+      if (filters.search) queryParams.append('search', filters.search);
+      if (filters.shape && filters.shape !== 'All') queryParams.append('shape', filters.shape);
+      if (filters.size && filters.size !== 'All') queryParams.append('size', filters.size);
+      if (filters.priceRange && filters.priceRange !== 'All') queryParams.append('priceRange', filters.priceRange);
+      if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
+      if (filters.page) queryParams.append('page', filters.page);
+      if (filters.limit) queryParams.append('limit', filters.limit);
+
+      const response = await fetch(`${API_URL}/products?${queryParams.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch products');
-      const data = await response.json();
-      
-      if (!data || data.length === 0) {
-        console.warn("Backend API returned empty. Falling back to dummy PRODUCTS.");
-        return PRODUCTS;
-      }
-
-      return data;
+      return await response.json();
     } catch (error) {
-      console.warn("Backend API Error (Fallback to dummy data):", error);
-      return PRODUCTS;
-    }
-  },
-
-  /**
-   * Fetches best selling / trending products.
-   */
-  getTrendingProducts: async (): Promise<Product[]> => {
-    try {
-      const response = await fetch(`${API_URL}/products`);
-      if (!response.ok) throw new Error('Failed to fetch trending products');
-      const data = await response.json();
-      
-      if (!data || data.length === 0) {
-        console.warn("Backend API returned empty. Falling back to dummy PRODUCTS (bestSeller).");
-        return PRODUCTS.filter(p => p.bestSeller);
-      }
-
-      return data.filter((p: Product) => p.bestSeller);
-    } catch (error) {
-      console.warn("Backend API Error (Fallback to dummy trending data):", error);
-      return PRODUCTS.filter(p => p.bestSeller);
+      console.warn("Backend API Error:", error);
+      return { products: PRODUCTS, page: 1, pages: 1, total: PRODUCTS.length }; // Fallback
     }
   },
 
@@ -53,16 +35,9 @@ export const api = {
     try {
       const response = await fetch(`${API_URL}/products/${id}`);
       if (!response.ok) throw new Error('Failed to fetch product');
-      const data = await response.json();
-      
-      if (!data) {
-        console.warn(`Backend API returned empty for ${id}. Falling back to dummy PRODUCTS.`);
-        return PRODUCTS.find(p => p.id === id) || null;
-      }
-      
-      return data;
+      return await response.json();
     } catch (error) {
-      console.warn(`Backend API Error for ${id} (Fallback to dummy data):`, error);
+      console.warn(`Backend API Error for ${id}:`, error);
       return PRODUCTS.find(p => p.id === id) || null;
     }
   },
@@ -106,7 +81,7 @@ export const api = {
   },
 
   /**
-   * Authentication
+   * Authentication & Profile
    */
   login: async (email: string, password: string) => {
     const response = await fetch(`${API_URL}/auth/login`, {
@@ -130,22 +105,98 @@ export const api = {
     return data;
   },
 
-  getProfile: async (token: string) => {
+  updateProfile: async (profileData: any, token: string) => {
     const response = await fetch(`${API_URL}/auth/profile`, {
-      method: 'GET',
+      method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
-      }
+      },
+      body: JSON.stringify(profileData)
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Failed to fetch profile');
+    if (!response.ok) throw new Error(data.message || 'Update failed');
+    return data;
+  },
+
+  /**
+   * User Data Syncing
+   */
+  getCart: async (token: string) => {
+    const response = await fetch(`${API_URL}/user/cart`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!response.ok) return [];
+    return await response.json();
+  },
+  updateCart: async (cart: any, token: string) => {
+    await fetch(`${API_URL}/user/cart`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ cart })
+    });
+  },
+  getWishlist: async (token: string) => {
+    const response = await fetch(`${API_URL}/user/wishlist`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!response.ok) return [];
+    return await response.json();
+  },
+  updateWishlist: async (wishlist: any, token: string) => {
+    await fetch(`${API_URL}/user/wishlist`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ wishlist })
+    });
+  },
+  getAddresses: async (token: string) => {
+    const response = await fetch(`${API_URL}/user/addresses`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!response.ok) return [];
+    return await response.json();
+  },
+  updateAddresses: async (addresses: any, token: string) => {
+    await fetch(`${API_URL}/user/addresses`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ addresses })
+    });
+  },
+  getMyOrders: async (token: string) => {
+    const response = await fetch(`${API_URL}/orders/myorders`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!response.ok) return [];
+    return await response.json();
+  },
+
+  /**
+   * Reviews
+   */
+  getReviews: async (productId: string) => {
+    const response = await fetch(`${API_URL}/products/${productId}/reviews`);
+    if (!response.ok) return [];
+    return await response.json();
+  },
+  addReview: async (productId: string, reviewData: any, token: string) => {
+    const response = await fetch(`${API_URL}/products/${productId}/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(reviewData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to submit review');
     return data;
   },
 
   /**
    * Admin Methods
    */
+  uploadImage: async (formData: FormData, token: string) => {
+    const response = await fetch(`${API_URL}/products/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData // No Content-Type header, let browser set it with boundary
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Image upload failed');
+    return data;
+  },
+
   createProduct: async (productData: any, token: string) => {
     const response = await fetch(`${API_URL}/products`, {
       method: 'POST',

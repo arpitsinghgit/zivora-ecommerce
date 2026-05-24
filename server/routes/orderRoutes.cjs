@@ -39,7 +39,16 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    let userId;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      const jwt = require('jsonwebtoken');
+      const token = req.headers.authorization.split(' ')[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+      userId = decoded.id;
+    }
+
     const order = new Order({
+      user: userId,
       orderItems,
       shippingAddress,
       paymentMethod,
@@ -62,7 +71,17 @@ router.post('/', async (req, res) => {
     res.status(500).json({ message: 'Failed to create order' });
   }
 });
-
+// @desc    Get logged in user orders
+// @route   GET /api/orders/myorders
+// @access  Private
+router.get('/myorders', protect, async (req, res) => {
+  try {
+    const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch user orders' });
+  }
+});
 // @desc    Get all orders
 // @route   GET /api/orders
 // @access  Private/Admin

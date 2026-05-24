@@ -3,6 +3,7 @@ import { Product, CartItem } from '../data/products';
 import { api } from '../api';
 
 export interface Address {
+  _id?: string;
   firstName: string;
   lastName: string;
   street: string;
@@ -14,6 +15,7 @@ export interface Address {
 
 export interface Order {
   id: string;
+  _id?: string;
   date: string;
   total: number;
   status: string;
@@ -45,14 +47,16 @@ interface GlobalContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  updateProfile: (profileData: any) => Promise<void>;
 
   // Orders
   orders: Order[];
-  addOrder: (order: Order) => void;
+  fetchOrders: () => Promise<void>;
 
   // Addresses
   addresses: Address[];
   addAddress: (address: Address) => void;
+  deleteAddress: (id: string) => void;
 
   // Toast
   toast: Toast;
@@ -69,124 +73,127 @@ export const useGlobal = () => {
 };
 
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Cart State (using localStorage instead of sessionStorage)
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const savedCart = localStorage.getItem('nails_world_cart');
-      if (savedCart) {
-        const parsed = JSON.parse(savedCart);
-        if (Array.isArray(parsed) && parsed.every(item => item?.product?.id)) {
-          return parsed;
-        }
-      }
-      return [];
-    } catch (e) {
-      console.error("Failed to parse cart from localStorage", e);
-      return [];
-    }
-  });
-
-  // Wishlist State
-  const [wishlist, setWishlist] = useState<string[]>(() => {
-    try {
-      const savedWishlist = localStorage.getItem('nails_world_wishlist');
-      if (savedWishlist) {
-        const parsed = JSON.parse(savedWishlist);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      console.error("Failed to parse wishlist from localStorage", e);
-      return [];
-    }
-  });
-
-  // Auth State
   const [user, setUser] = useState<{ name: string, email: string, token: string, role: string } | null>(() => {
     try {
       const savedUser = localStorage.getItem('nails_world_user_obj');
       return savedUser ? JSON.parse(savedUser) : null;
     } catch (e) {
-      console.error("Failed to parse user from localStorage", e);
       return null;
     }
   });
 
-  // Toast State
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nails_world_cart') || '[]'); } catch { return []; }
+  });
+
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nails_world_wishlist') || '[]'); } catch { return []; }
+  });
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [toast, setToast] = useState<Toast>({ show: false, message: '', type: 'success' });
 
-  // Orders State
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const savedOrders = localStorage.getItem('nails_world_orders');
-      if (savedOrders) {
-        const parsed = JSON.parse(savedOrders);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  // Addresses State
-  const [addresses, setAddresses] = useState<Address[]>(() => {
-    try {
-      const savedAddresses = localStorage.getItem('nails_world_addresses');
-      if (savedAddresses) {
-        const parsed = JSON.parse(savedAddresses);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  // Sync cart to localStorage
+  // Sync state from backend when user logs in or app loads with existing user
   useEffect(() => {
-    localStorage.setItem('nails_world_cart', JSON.stringify(cart));
-  }, [cart]);
-
-  // Sync wishlist to localStorage
-  useEffect(() => {
-    localStorage.setItem('nails_world_wishlist', JSON.stringify(wishlist));
-  }, [wishlist]);
-
-  // Sync user to localStorage
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('nails_world_user_obj', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('nails_world_user_obj');
+    if (user && user.token) {
+      Promise.all([
+        api.getCart(user.token),
+        api.getWishlist(user.token),
+        api.getAddresses(user.token),
+        api.getMyOrders(user.token)
+      ]).then(([dbCart, dbWishlist, dbAddresses, dbOrders]) => {
+        if (dbCart && Array.isArray(dbCart)) setCart(dbCart);
+        if (dbWishlist && Array.isArray(dbWishlist)) setWishlist(dbWishlist);
+        if (dbAddresses && Array.isArray(dbAddresses)) setAddresses(dbAddresses);
+        if (dbOrders && Array.isArray(dbOrders)) {
+          // Format orders from backend to match frontend interface
+          const formattedOrders = dbOrders.map((o: any) => ({
+            id: o._id,
+            date: new Date(o.createdAt).toLocaleDateString(),
+            total: o.totalPrice,
+            status: o.isDelivered ? 'Delivered' : (o.status || 'Processing'),
+            items: o.orderItems.map((item: any) => ({
+              product: { id: item.product, name: item.name, images: [item.image], price: item.price },
+              quantity: item.quantity,
+              selectedSize: item.selectedSize,
+              selectedShape: item.selectedShape
+            }))
+          }));
+          setOrders(formattedOrders);
+        }
+      }).catch(console.error);
     }
+  }, [user?.token]);
+
+  // Sync to local storage
+  useEffect(() => { localStorage.setItem('nails_world_cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { localStorage.setItem('nails_world_wishlist', JSON.stringify(wishlist)); }, [wishlist]);
+  useEffect(() => { 
+    if (user) localStorage.setItem('nails_world_user_obj', JSON.stringify(user)); 
+    else localStorage.removeItem('nails_world_user_obj');
   }, [user]);
 
-  // Sync orders to localStorage
+  // Sync to backend when state changes
   useEffect(() => {
-    localStorage.setItem('nails_world_orders', JSON.stringify(orders));
-  }, [orders]);
+    if (user) api.updateCart(cart, user.token).catch(console.error);
+  }, [cart, user]);
 
-  // Sync addresses to localStorage
   useEffect(() => {
-    localStorage.setItem('nails_world_addresses', JSON.stringify(addresses));
-  }, [addresses]);
+    if (user) api.updateWishlist(wishlist, user.token).catch(console.error);
+  }, [wishlist, user]);
 
-  // --- Orders & Addresses Methods ---
-  const addOrder = (order: Order) => {
-    setOrders(prev => [order, ...prev]);
+  useEffect(() => {
+    if (user) api.updateAddresses(addresses, user.token).catch(console.error);
+  }, [addresses, user]);
+
+  // --- Profile Methods ---
+  const updateProfile = async (profileData: any) => {
+    if (!user) return;
+    try {
+      const updatedUser = await api.updateProfile(profileData, user.token);
+      setUser({ ...user, name: updatedUser.name });
+      triggerToast('Profile updated successfully', 'success');
+    } catch (error: any) {
+      triggerToast(error.message || 'Failed to update profile', 'error');
+      throw error;
+    }
   };
 
+  const fetchOrders = async () => {
+    if (!user) return;
+    try {
+      const dbOrders = await api.getMyOrders(user.token);
+      const formattedOrders = dbOrders.map((o: any) => ({
+        id: o._id,
+        date: new Date(o.createdAt).toLocaleDateString(),
+        total: o.totalPrice,
+        status: o.isDelivered ? 'Delivered' : (o.status || 'Processing'),
+        items: o.orderItems.map((item: any) => ({
+          product: { id: item.product, name: item.name, images: [item.image], price: item.price },
+          quantity: item.quantity,
+          selectedSize: item.selectedSize,
+          selectedShape: item.selectedShape
+        }))
+      }));
+      setOrders(formattedOrders);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // --- Addresses Methods ---
   const addAddress = (address: Address) => {
     setAddresses(prev => {
-      // Check if duplicate address exists
-      const exists = prev.some(a => a.street === address.street && a.zipCode === address.zipCode);
-      if (exists) return prev;
-      
-      // If it's the first address, make it default
-      const newAddress = { ...address, isDefault: prev.length === 0 };
+      const newAddress = { ...address, isDefault: prev.length === 0, _id: Date.now().toString() };
       return [...prev, newAddress];
     });
+    triggerToast('Address saved', 'success');
+  };
+
+  const deleteAddress = (id: string) => {
+    setAddresses(prev => prev.filter(a => a._id !== id));
+    triggerToast('Address deleted', 'info');
   };
 
   // --- Cart Methods ---
@@ -278,6 +285,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const logout = () => {
     setUser(null);
+    setCart([]);
+    setWishlist([]);
+    setOrders([]);
+    setAddresses([]);
     triggerToast('Logged out successfully. See you soon!', 'info');
   };
 
@@ -295,11 +306,9 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     <GlobalContext.Provider value={{
       cart, addToCart, updateCartQuantity, removeFromCart, clearCart,
       wishlist, addToWishlist, removeFromWishlist, isInWishlist,
-      user, login, register, logout,
-      orders,
-      addOrder,
-      addresses,
-      addAddress,
+      user, login, register, logout, updateProfile,
+      orders, fetchOrders,
+      addresses, addAddress, deleteAddress,
       toast, triggerToast, closeToast
     }}>
       {children}

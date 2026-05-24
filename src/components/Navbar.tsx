@@ -44,7 +44,7 @@ export default function Navbar({
       {/* Top Banner */}
       <div className="bg-rose-950 text-rose-50 text-[11px] font-medium tracking-widest text-center py-2 px-4 uppercase relative overflow-hidden flex items-center justify-center space-x-2">
         <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-        <span>Free Shipping on orders over $50 • Use Code: <span className="font-semibold text-amber-200">WELCOME15</span> for 15% off</span>
+        <span>Free Shipping on orders over ₹2000</span>
         <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
       </div>
 

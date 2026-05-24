@@ -17,9 +17,6 @@ export default function ProductCard({ product, onSelect, onAddToCart }: ProductC
 
   const isLiked = wishlist.includes(product.id);
 
-  const discountAmount = product.originalPrice 
-    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-    : 0;
 
   const handleQuickAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -76,11 +73,7 @@ export default function ProductCard({ product, onSelect, onAddToCart }: ProductC
               New
             </span>
           )}
-          {product.originalPrice && (
-            <span className="text-[9px] font-bold tracking-widest uppercase bg-rose-600 text-white px-2.5 py-1 rounded-sm shadow-sm">
-              -{discountAmount}% OFF
-            </span>
-          )}
+
         </div>
 
         {/* Wishlist Heart Icon */}
@@ -188,11 +181,7 @@ export default function ProductCard({ product, onSelect, onAddToCart }: ProductC
           <span className="text-sm font-bold text-zinc-900">
             ₹{product.price.toFixed(0)}
           </span>
-          {product.originalPrice && (
-            <span className="text-xs text-zinc-400 line-through">
-              ₹{product.originalPrice.toFixed(0)}
-            </span>
-          )}
+
         </div>
       </div>
     </div>

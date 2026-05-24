@@ -7,10 +7,22 @@ const path = require('path');
 
 // Routes
 const authRoutes = require('./server/routes/authRoutes.cjs');
+const userRoutes = require('./server/routes/userRoutes.cjs');
 const productRoutes = require('./server/routes/productRoutes.cjs');
+const reviewRoutes = require('./server/routes/reviewRoutes.cjs');
 const orderRoutes = require('./server/routes/orderRoutes.cjs');
 
 const app = express();
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+// Security Middleware
+app.use(helmet());
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
 // Middleware
 app.use(cors());
@@ -37,7 +49,9 @@ const razorpay = new Razorpay({
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/products', reviewRoutes); // Review routes mounted on /api/products
 app.use('/api/orders', orderRoutes);
 
 // Endpoint to create a Razorpay Order
@@ -65,7 +79,7 @@ app.post('/api/create-razorpay-order', async (req, res) => {
 
 // Serve frontend in production
 app.use(express.static(path.join(__dirname, 'dist')));
-app.get('*', (req, res) => res.sendFile(path.resolve(__dirname, 'dist', 'index.html')));
+app.use((req, res) => res.sendFile(path.resolve(__dirname, 'dist', 'index.html')));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

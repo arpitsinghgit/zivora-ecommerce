@@ -20,6 +20,10 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [customMeasurements, setCustomMeasurements] = useState('');
   const [addedStatus, setAddedStatus] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', content: '' });
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const { user, triggerToast } = useGlobal();
 
   useEffect(() => {
     if (id) {
@@ -32,20 +36,38 @@ export default function ProductDetail() {
           setSelectedColor(data.colors?.[0]?.name || '');
         }
       });
-      // Fetch some dummy related products
       api.getProducts().then(data => {
-        setRelatedProducts(data.filter(p => p.id !== id).slice(0, 4));
+        setRelatedProducts(data.products ? data.products.filter((p: any) => p.id !== id).slice(0, 4) : []);
+      });
+      api.getReviews(id).then(data => {
+        if (Array.isArray(data)) setReviews(data);
       });
     }
   }, [id]);
+
+  const submitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      triggerToast('Please login to review', 'error');
+      return;
+    }
+    try {
+      await api.addReview(product!.id, reviewForm, user.token);
+      triggerToast('Review submitted successfully', 'success');
+      setShowReviewForm(false);
+      setReviewForm({ rating: 5, title: '', content: '' });
+      const newReviews = await api.getReviews(product!.id);
+      setReviews(newReviews);
+    } catch (error: any) {
+      triggerToast(error.message, 'error');
+    }
+  };
 
   if (!product) {
     return <div className="py-20 text-center">Loading...</div>;
   }
 
-  const discountAmount = product.originalPrice 
-    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-    : 0;
+
 
   const isWished = wishlist.includes(product.id);
   const handleWishlistToggle = () => {
@@ -124,12 +146,7 @@ export default function ProductDetail() {
           <div className="py-4 border-y border-zinc-100 flex items-center justify-between">
             <div className="flex items-baseline space-x-3">
               <span className="text-2xl font-bold text-zinc-950">₹{product.price.toFixed(0)}</span>
-              {product.originalPrice && (
-                <>
-                  <span className="text-sm text-zinc-400 line-through">₹{product.originalPrice.toFixed(0)}</span>
-                  <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-sm">Save {discountAmount}%</span>
-                </>
-              )}
+
             </div>
             <div className="text-right">
               {product.inStock ? <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-sm">In Stock</span> : <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-1 rounded-sm">Sold Out</span>}
@@ -229,44 +246,66 @@ export default function ProductDetail() {
           <div className="lg:col-span-1">
             <h2 className="font-serif text-2xl font-bold text-zinc-900 mb-4">Customer Reviews</h2>
             <div className="flex items-center space-x-4 mb-4">
-              <span className="text-4xl font-bold text-zinc-950">{product.rating}</span>
+              <span className="text-4xl font-bold text-zinc-950">{product.rating ? product.rating.toFixed(1) : '5.0'}</span>
               <div className="flex flex-col">
                 <div className="flex text-amber-400">
-                  {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'fill-current' : ''}`} />)}
+                  {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating || 5) ? 'fill-current' : ''}`} />)}
                 </div>
-                <span className="text-xs text-zinc-500 mt-1">Based on 24 reviews</span>
+                <span className="text-xs text-zinc-500 mt-1">Based on {reviews.length} reviews</span>
               </div>
             </div>
-            <button className="w-full py-2.5 border-2 border-zinc-950 text-zinc-950 font-semibold text-xs tracking-wider uppercase rounded-lg hover:bg-zinc-950 hover:text-white transition-colors cursor-pointer">
-              Write a Review
-            </button>
+            {user ? (
+              <button onClick={() => setShowReviewForm(!showReviewForm)} className="w-full py-2.5 border-2 border-zinc-950 text-zinc-950 font-semibold text-xs tracking-wider uppercase rounded-lg hover:bg-zinc-950 hover:text-white transition-colors cursor-pointer">
+                Write a Review
+              </button>
+            ) : (
+              <p className="text-xs text-zinc-500">Please login to write a review.</p>
+            )}
+            
+            {showReviewForm && (
+              <form onSubmit={submitReview} className="mt-4 p-4 border border-zinc-200 rounded-lg space-y-3 bg-zinc-50">
+                <div>
+                  <label className="text-xs font-bold block mb-1">Rating (1-5)</label>
+                  <input type="number" min="1" max="5" value={reviewForm.rating} onChange={e => setReviewForm({...reviewForm, rating: Number(e.target.value)})} className="w-full p-2 border border-zinc-200 rounded text-xs" required />
+                </div>
+                <div>
+                  <label className="text-xs font-bold block mb-1">Title</label>
+                  <input type="text" value={reviewForm.title} onChange={e => setReviewForm({...reviewForm, title: e.target.value})} className="w-full p-2 border border-zinc-200 rounded text-xs" required />
+                </div>
+                <div>
+                  <label className="text-xs font-bold block mb-1">Review</label>
+                  <textarea value={reviewForm.content} onChange={e => setReviewForm({...reviewForm, content: e.target.value})} className="w-full p-2 border border-zinc-200 rounded text-xs" rows={3} required />
+                </div>
+                <button type="submit" className="w-full py-2 bg-amber-700 text-white rounded text-xs font-bold uppercase cursor-pointer hover:bg-amber-800">Submit</button>
+              </form>
+            )}
           </div>
           
           <div className="lg:col-span-3 space-y-6">
-            {[
-              { name: "Sarah J.", rating: 5, date: "Oct 12, 2023", title: "Absolutely stunning!", content: "These nails are literally perfection. They look exactly like the salon and stayed on for 2 weeks straight without lifting. Highly recommend!" },
-              { name: "Emily R.", rating: 5, date: "Sep 28, 2023", title: "Best I've ever used", content: "The sizing is spot on and the finish is incredibly glossy. I've tried many brands but Zivora is my new go-to." },
-              { name: "Jessica M.", rating: 4, date: "Sep 15, 2023", title: "Gorgeous color", content: "The color is slightly darker in person but still very beautiful. Application was super easy and they feel very sturdy." }
-            ].map((review, idx) => (
-              <div key={idx} className="pb-6 border-b border-zinc-100 last:border-0">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <div className="flex text-amber-400 mb-1">
-                      {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'fill-current' : ''}`} />)}
+            {reviews.length === 0 ? (
+              <p className="text-zinc-500 text-sm">No reviews yet. Be the first to review!</p>
+            ) : (
+              reviews.map((review: any, idx: number) => (
+                <div key={idx} className="pb-6 border-b border-zinc-100 last:border-0">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="flex text-amber-400 mb-1">
+                        {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'fill-current' : ''}`} />)}
+                      </div>
+                      <span className="font-bold text-sm text-zinc-900">{review.title}</span>
                     </div>
-                    <span className="font-bold text-sm text-zinc-900">{review.title}</span>
+                    <span className="text-xs text-zinc-400">{new Date(review.createdAt).toLocaleDateString()}</span>
                   </div>
-                  <span className="text-xs text-zinc-400">{review.date}</span>
+                  <p className="text-sm text-zinc-600 mb-2">{review.content}</p>
+                  <div className="flex items-center space-x-2 text-xs text-zinc-500">
+                    <span className="font-semibold text-zinc-700">{review.name}</span>
+                    <span className="flex items-center text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider">
+                      <Check className="w-2.5 h-2.5 mr-0.5" /> Verified Buyer
+                    </span>
+                  </div>
                 </div>
-                <p className="text-sm text-zinc-600 mb-2">{review.content}</p>
-                <div className="flex items-center space-x-2 text-xs text-zinc-500">
-                  <span className="font-semibold text-zinc-700">{review.name}</span>
-                  <span className="flex items-center text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider">
-                    <Check className="w-2.5 h-2.5 mr-0.5" /> Verified Buyer
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

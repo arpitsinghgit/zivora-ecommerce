@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGlobal } from '../context/GlobalContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { Package, ShoppingCart, CheckCircle, Trash2, Edit } from 'lucide-react';
+import { Package, ShoppingCart, CheckCircle, Trash2, Edit, Upload } from 'lucide-react';
 import { Product } from '../data/products';
 
 export default function AdminDashboard() {
@@ -13,6 +13,14 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // New Product Form State
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: '', price: 0, category: 'press-on', description: ''
+  });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Redirect if not admin
   useEffect(() => {
@@ -31,7 +39,7 @@ export default function AdminDashboard() {
         setOrders(data);
       } else {
         const data = await api.getProducts();
-        setProducts(data);
+        setProducts(data.products || data);
       }
     } catch (err: any) {
       triggerToast(err.message || 'Failed to fetch data', 'error');
@@ -67,19 +75,30 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCreateDummyProduct = async () => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!user?.token) return;
+    
     try {
-      const newProduct = {
-        name: 'New Zivora Collection',
-        price: 999,
-        category: 'press-on',
-        categoryLabel: 'Press-on Nails',
-        image: 'https://images.unsplash.com/photo-1604654894610-df63bc536371',
-        description: 'A beautiful new set of nails.',
+      let imageUrl = 'https://images.unsplash.com/photo-1604654894610-df63bc536371'; // Default
+      
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('image', imageFile);
+        const res = await api.uploadImage(formData, user.token);
+        imageUrl = res.imageUrl;
+      }
+
+      const productPayload = {
+        ...newProduct,
+        images: [imageUrl]
       };
-      await api.createProduct(newProduct, user.token);
+
+      await api.createProduct(productPayload, user.token);
       triggerToast('Product created!', 'success');
+      setShowAddForm(false);
+      setImageFile(null);
+      setNewProduct({ name: '', price: 0, category: 'press-on', description: '' });
       fetchData();
     } catch (err: any) {
       triggerToast(err.message, 'error');
@@ -153,7 +172,7 @@ export default function AdminDashboard() {
                         {!order.isDelivered && (
                           <button
                             onClick={() => handleMarkShipped(order._id)}
-                            className="flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-800"
+                            className="flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-800 cursor-pointer"
                           >
                             <CheckCircle className="w-4 h-4 mr-1" /> Mark Shipped
                           </button>
@@ -175,12 +194,56 @@ export default function AdminDashboard() {
             <div>
               <div className="flex justify-end mb-4">
                 <button
-                  onClick={handleCreateDummyProduct}
-                  className="bg-zinc-900 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider rounded hover:bg-amber-700 transition"
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  className="bg-zinc-900 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider rounded hover:bg-amber-700 transition cursor-pointer"
                 >
-                  + Quick Add Product
+                  {showAddForm ? 'Cancel' : '+ Add Product'}
                 </button>
               </div>
+
+              {showAddForm && (
+                <div className="bg-zinc-50 border border-zinc-200 p-6 rounded-lg mb-6">
+                  <h3 className="font-bold text-sm mb-4">Create New Product</h3>
+                  <form onSubmit={handleCreateProduct} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold mb-1">Product Name</label>
+                        <input type="text" required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full p-2 border border-zinc-200 rounded text-xs" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold mb-1">Price (₹)</label>
+                        <input type="number" required min="0" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})} className="w-full p-2 border border-zinc-200 rounded text-xs" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold mb-1">Category</label>
+                        <select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} className="w-full p-2 border border-zinc-200 rounded text-xs">
+                          <option value="press-on">Press-On Nails</option>
+                          <option value="polish">Gel Polish</option>
+                          <option value="art-care">Care & Tools</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold mb-1">Upload Image</label>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          accept="image/*"
+                          onChange={e => setImageFile(e.target.files?.[0] || null)}
+                          className="w-full p-1.5 border border-zinc-200 rounded text-xs bg-white"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-bold mb-1">Description</label>
+                        <textarea required value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="w-full p-2 border border-zinc-200 rounded text-xs" rows={3}></textarea>
+                      </div>
+                    </div>
+                    <button type="submit" className="flex items-center justify-center space-x-2 w-full py-2 bg-amber-700 text-white rounded text-xs font-bold uppercase cursor-pointer hover:bg-amber-800">
+                      <Upload className="w-4 h-4" /> <span>Upload & Create Product</span>
+                    </button>
+                  </form>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-zinc-600">
                   <thead className="text-xs uppercase bg-zinc-50 text-zinc-700">
@@ -196,16 +259,13 @@ export default function AdminDashboard() {
                     {products.map((product) => (
                       <tr key={product.id || (product as any)._id} className="border-b">
                         <td className="px-6 py-4">
-                          <img src={product.image || product.images[0]} alt={product.name} className="w-12 h-12 object-cover rounded" />
+                          <img src={product.image || (product.images && product.images[0])} alt={product.name} className="w-12 h-12 object-cover rounded border border-zinc-200" />
                         </td>
                         <td className="px-6 py-4 font-medium text-zinc-900">{product.name}</td>
                         <td className="px-6 py-4">₹{product.price}</td>
                         <td className="px-6 py-4">{product.category}</td>
                         <td className="px-6 py-4 text-right">
-                          <button className="text-zinc-400 hover:text-amber-600 mr-3" title="Edit">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDeleteProduct(product.id || (product as any)._id)} className="text-zinc-400 hover:text-red-600" title="Delete">
+                          <button onClick={() => handleDeleteProduct(product.id || (product as any)._id)} className="text-zinc-400 hover:text-red-600 cursor-pointer" title="Delete">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </td>

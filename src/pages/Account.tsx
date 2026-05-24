@@ -1,14 +1,32 @@
-import { useState } from 'react';
-import { useGlobal } from '../context/GlobalContext';
+import { useState, useEffect } from 'react';
+import { useGlobal, Address } from '../context/GlobalContext';
 import { Package, MapPin, User, LogOut, ChevronRight, CircleCheckBig, Clock, ShoppingBag } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
 type Tab = 'profile' | 'orders' | 'addresses';
 
 export default function Account() {
-  const { user, logout, orders, addresses } = useGlobal();
+  const { user, logout, orders, addresses, updateProfile, addAddress, deleteAddress, fetchOrders } = useGlobal();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('orders');
+
+  // Profile Form State
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+
+  // Address Form State
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [newAddress, setNewAddress] = useState<Address>({
+    firstName: '', lastName: '', street: '', city: '', zipCode: '', phone: ''
+  });
+
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name);
+      fetchOrders();
+    }
+  }, [user]);
 
   if (!user) {
     return (
@@ -28,6 +46,26 @@ export default function Account() {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingProfile(true);
+    try {
+      const payload: any = { name: profileName };
+      if (profilePassword) payload.password = profilePassword;
+      await updateProfile(payload);
+      setProfilePassword('');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
+  const handleAddAddress = (e: React.FormEvent) => {
+    e.preventDefault();
+    addAddress(newAddress);
+    setShowAddressForm(false);
+    setNewAddress({ firstName: '', lastName: '', street: '', city: '', zipCode: '', phone: '' });
   };
 
   return (
@@ -79,16 +117,23 @@ export default function Account() {
           {activeTab === 'profile' && (
             <div className="bg-white border border-zinc-200 rounded-2xl p-8 shadow-sm">
               <h3 className="font-serif text-2xl font-bold text-zinc-900 mb-6">Profile Details</h3>
-              <div className="space-y-4 max-w-md">
+              <form onSubmit={handleUpdateProfile} className="space-y-4 max-w-md">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Full Name</label>
-                  <p className="text-zinc-900 font-medium p-3 bg-zinc-50 rounded-lg border border-zinc-100">{user.name}</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Email Address</label>
+                  <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Email Address (Cannot be changed)</label>
                   <p className="text-zinc-900 font-medium p-3 bg-zinc-50 rounded-lg border border-zinc-100">{user.email}</p>
                 </div>
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Full Name</label>
+                  <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="w-full text-zinc-900 font-medium p-3 rounded-lg border border-zinc-200 focus:outline-none focus:border-amber-700" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">New Password (Leave blank to keep current)</label>
+                  <input type="password" value={profilePassword} onChange={e => setProfilePassword(e.target.value)} className="w-full text-zinc-900 font-medium p-3 rounded-lg border border-zinc-200 focus:outline-none focus:border-amber-700" />
+                </div>
+                <button type="submit" disabled={isUpdatingProfile} className="px-6 py-3 bg-zinc-950 text-white font-medium text-xs tracking-wider uppercase rounded-lg hover:bg-zinc-850 cursor-pointer disabled:bg-zinc-400 mt-4">
+                  {isUpdatingProfile ? 'Updating...' : 'Update Profile'}
+                </button>
+              </form>
             </div>
           )}
 
@@ -117,7 +162,7 @@ export default function Account() {
                     <div key={i} className="p-6 hover:bg-zinc-50/30 transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                         <div>
-                          <p className="text-sm font-bold text-zinc-900">{order.id}</p>
+                          <p className="text-sm font-bold text-zinc-900">Order #{order.id.substring(0, 8).toUpperCase()}</p>
                           <p className="text-xs text-zinc-500 mt-1">Placed on {order.date}</p>
                         </div>
                         <div className="flex flex-col sm:items-end gap-2">
@@ -134,9 +179,9 @@ export default function Account() {
                       <div className="bg-zinc-50 rounded-lg p-4 flex gap-4 overflow-x-auto">
                         {order.items.map((item, index) => (
                           <div key={index} className="flex-shrink-0 flex items-center gap-3 pr-4 border-r border-zinc-200 last:border-0">
-                            <img src={item.product.images[0]} alt={item.product.name} className="w-12 h-12 object-cover rounded-md" />
+                            <img src={item.product.images[0]} alt={item.product.name} className="w-12 h-12 object-cover rounded-md border border-zinc-200" />
                             <div>
-                              <p className="text-xs font-bold text-zinc-900">{item.product.name}</p>
+                              <p className="text-xs font-bold text-zinc-900 line-clamp-1 max-w-[150px]">{item.product.name}</p>
                               <p className="text-[10px] text-zinc-500">Qty: {item.quantity}</p>
                             </div>
                           </div>
@@ -154,12 +199,27 @@ export default function Account() {
             <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
               <div className="px-6 py-5 border-b border-zinc-200 bg-zinc-50/50 flex justify-between items-center">
                 <h3 className="font-serif text-xl font-bold text-zinc-900">Saved Addresses</h3>
-                <button className="text-xs font-semibold text-amber-700 hover:text-amber-800 uppercase tracking-wider cursor-pointer">
-                  + Add New
+                <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-xs font-semibold text-amber-700 hover:text-amber-800 uppercase tracking-wider cursor-pointer">
+                  {showAddressForm ? 'Cancel' : '+ Add New'}
                 </button>
               </div>
               
-              {addresses.length === 0 ? (
+              {showAddressForm && (
+                <div className="p-6 border-b border-zinc-200 bg-zinc-50">
+                  <h4 className="font-bold text-sm mb-4">Add New Address</h4>
+                  <form onSubmit={handleAddAddress} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input type="text" placeholder="First Name" required value={newAddress.firstName} onChange={e => setNewAddress({...newAddress, firstName: e.target.value})} className="p-2 text-sm border border-zinc-200 rounded focus:border-amber-700" />
+                    <input type="text" placeholder="Last Name" required value={newAddress.lastName} onChange={e => setNewAddress({...newAddress, lastName: e.target.value})} className="p-2 text-sm border border-zinc-200 rounded focus:border-amber-700" />
+                    <input type="text" placeholder="Phone" required value={newAddress.phone} onChange={e => setNewAddress({...newAddress, phone: e.target.value})} className="p-2 text-sm border border-zinc-200 rounded focus:border-amber-700" />
+                    <input type="text" placeholder="ZIP Code" required value={newAddress.zipCode} onChange={e => setNewAddress({...newAddress, zipCode: e.target.value})} className="p-2 text-sm border border-zinc-200 rounded focus:border-amber-700" />
+                    <input type="text" placeholder="Street Address" required value={newAddress.street} onChange={e => setNewAddress({...newAddress, street: e.target.value})} className="p-2 text-sm border border-zinc-200 rounded focus:border-amber-700 sm:col-span-2" />
+                    <input type="text" placeholder="City" required value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} className="p-2 text-sm border border-zinc-200 rounded focus:border-amber-700 sm:col-span-2" />
+                    <button type="submit" className="sm:col-span-2 py-2.5 bg-zinc-950 text-white font-bold text-xs uppercase rounded cursor-pointer hover:bg-zinc-800">Save Address</button>
+                  </form>
+                </div>
+              )}
+
+              {addresses.length === 0 && !showAddressForm ? (
                 <div className="p-12 text-center">
                   <div className="w-16 h-16 rounded-full bg-zinc-50 mx-auto flex items-center justify-center mb-4">
                     <MapPin className="w-6 h-6 text-zinc-400" />
@@ -180,9 +240,9 @@ export default function Account() {
                       <p className="text-xs text-zinc-600 mt-0.5">Phone: {addr.phone}</p>
                       
                       <div className="mt-4 flex gap-3">
-                        <button className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-amber-700">Edit</button>
+                        <button className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-amber-700 cursor-pointer">Edit</button>
                         {!addr.isDefault && (
-                          <button className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-red-600">Delete</button>
+                          <button onClick={() => deleteAddress(addr._id!)} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-red-600 cursor-pointer">Delete</button>
                         )}
                       </div>
                     </div>
