@@ -28,6 +28,18 @@ export const api = {
     }
   },
 
+  getTrendingProducts: async (): Promise<Product[]> => {
+    try {
+      const response = await fetch(`${API_URL}/products?sortBy=rating&limit=6`);
+      if (!response.ok) throw new Error('Failed to fetch trending products');
+      const data = await response.json();
+      return data.products || data;
+    } catch (error) {
+      console.warn("Backend API Error:", error);
+      return PRODUCTS.slice(0, 6);
+    }
+  },
+
   /**
    * Fetches a specific product by ID.
    */
