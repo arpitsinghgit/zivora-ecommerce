@@ -18,7 +18,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   if (!isOpen) return null;
 
   // Calculate math
-  const itemsSubtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const itemsSubtotal = cart.reduce((sum, item) => sum + ((item?.product?.price || 0) * (item?.quantity || 0)), 0);
   
   // Promo code verification
   const handleApplyPromo = (e: React.FormEvent) => {

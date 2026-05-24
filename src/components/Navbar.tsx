@@ -18,7 +18,7 @@ export default function Navbar({
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCount = cart.reduce((sum, item) => sum + (item?.quantity || 0), 0);
 
   const handleNavClick = (category: 'all' | 'press-on' | 'polish' | 'art-care') => {
     if (category === 'all') {
