@@ -88,20 +88,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// @desc    Seed the database with default products
-// @route   GET /api/products/seed
-// @access  Public (Temporary for setup)
-router.get('/seed', async (req, res) => {
-  try {
-    const productsData = require('../data.cjs');
-    await Product.deleteMany({});
-    const createdProducts = await Product.insertMany(productsData);
-    res.json({ message: 'Database seeded successfully', count: createdProducts.length });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // @desc    Fetch single product
 // @route   GET /api/products/:id
 // @access  Public
